@@ -48,7 +48,7 @@
               
                       <div class="form-group">
                           <label for="inputEmail" class="col-form-label">Email</label>
-                        <input id="inputEmail" disabled type="email" name="email" placeholder="Enter email"  value="{{$profile->email}}" class="form-control">
+                        <input id="inputEmail" readonly type="email" name="email" placeholder="Enter email"  value="{{$profile->email}}" class="form-control" style="background-color: #e9ecef;">
                         @error('email')
                         <span class="text-danger">{{$message}}</span>
                         @enderror
@@ -70,14 +70,8 @@
                       </div>
                       <div class="form-group">
                           <label for="role" class="col-form-label">Role</label>
-                          <select name="role" class="form-control">
-                              <option value="">-----Select Role-----</option>
-                                  <option value="admin" {{(($profile->role=='admin')? 'selected' : '')}}>Admin</option>
-                                  <option value="user" {{(($profile->role=='user')? 'selected' : '')}}>User</option>
-                          </select>
-                        @error('role')
-                        <span class="text-danger">{{$message}}</span>
-                        @enderror
+                          <input type="text" value="{{ucfirst($profile->role)}}" class="form-control" readonly style="background-color: #e9ecef;">
+                          <small class="form-text text-muted">Role cannot be changed from profile page</small>
                         </div>
 
                         <button type="submit" class="btn btn-success btn-sm">Update</button>

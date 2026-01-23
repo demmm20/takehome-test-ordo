@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use App\User;
+use App\Models\User;
 class UsersController extends Controller
 {
     /**
@@ -36,29 +36,26 @@ class UsersController extends Controller
      */
     public function store(Request $request)
     {
-        $this->validate($request,
-        [
-            'name'=>'string|required|max:30',
-            'email'=>'string|required|unique:users',
-            'password'=>'string|required',
-            'role'=>'required|in:admin,user',
-            'status'=>'required|in:active,inactive',
-            'photo'=>'nullable|string',
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|max:255|unique:users,email',
+            'password' => 'required|string|min:6|confirmed',
+            'role' => 'required|in:admin,user',
+            'status' => 'required|in:active,inactive',
+            'photo' => 'nullable|string|max:500',
         ]);
-        // dd($request->all());
-        $data=$request->all();
-        $data['password']=Hash::make($request->password);
-        // dd($data);
-        $status=User::create($data);
-        // dd($status);
-        if($status){
-            request()->session()->flash('success','Successfully added user');
-        }
-        else{
-            request()->session()->flash('error','Error occurred while adding user');
-        }
-        return redirect()->route('users.index');
 
+        try {
+            $validated['password'] = Hash::make($validated['password']);
+            $user = User::create($validated);
+            
+            return redirect()->route('users.index')
+                ->with('success', 'Successfully added user');
+        } catch (\Exception $e) {
+            \Log::error('User creation failed: ' . $e->getMessage());
+            return redirect()->route('users.index')
+                ->with('error', 'Error occurred while adding user');
+        }
     }
 
     /**
@@ -93,28 +90,35 @@ class UsersController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $user=User::findOrFail($id);
-        $this->validate($request,
-        [
-            'name'=>'string|required|max:30',
-            'email'=>'string|required',
-            'role'=>'required|in:admin,user',
-            'status'=>'required|in:active,inactive',
-            'photo'=>'nullable|string',
-        ]);
-        // dd($request->all());
-        $data=$request->all();
-        // dd($data);
+        $user = User::findOrFail($id);
         
-        $status=$user->fill($data)->save();
-        if($status){
-            request()->session()->flash('success','Successfully updated');
-        }
-        else{
-            request()->session()->flash('error','Error occured while updating');
-        }
-        return redirect()->route('users.index');
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|max:255|unique:users,email,' . $id,
+            'role' => 'required|in:admin,user',
+            'status' => 'required|in:active,inactive',
+            'photo' => 'nullable|string|max:500',
+            'password' => 'nullable|string|min:6|confirmed',
+        ]);
 
+        try {
+            // Only update password if provided
+            if ($request->filled('password')) {
+                $validated['password'] = Hash::make($validated['password']);
+            } else {
+                unset($validated['password']);
+            }
+            
+            $status = $user->update($validated);
+            
+            return redirect()->route('users.index')
+                ->with($status ? 'success' : 'error',
+                    $status ? 'Successfully updated' : 'Error occurred while updating');
+        } catch (\Exception $e) {
+            \Log::error('User update failed: ' . $e->getMessage());
+            return redirect()->route('users.index')
+                ->with('error', 'Error occurred while updating');
+        }
     }
 
     /**
@@ -125,14 +129,24 @@ class UsersController extends Controller
      */
     public function destroy($id)
     {
-        $delete=User::findorFail($id);
-        $status=$delete->delete();
-        if($status){
-            request()->session()->flash('success','User Successfully deleted');
+        try {
+            $user = User::findOrFail($id);
+            
+            // Prevent deleting own account
+            if ($user->id === auth()->id()) {
+                return redirect()->route('users.index')
+                    ->with('error', 'You cannot delete your own account');
+            }
+            
+            $status = $user->delete();
+            
+            return redirect()->route('users.index')
+                ->with($status ? 'success' : 'error',
+                    $status ? 'User successfully deleted' : 'There is an error while deleting user');
+        } catch (\Exception $e) {
+            \Log::error('User deletion failed: ' . $e->getMessage());
+            return redirect()->route('users.index')
+                ->with('error', 'There is an error while deleting user');
         }
-        else{
-            request()->session()->flash('error','There is an error while deleting users');
-        }
-        return redirect()->route('users.index');
     }
 }

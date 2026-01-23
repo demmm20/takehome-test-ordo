@@ -4,8 +4,6 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Brand;
-use Illuminate\Support\Str;
-use App\Helpers\helpers;
 
 class BrandController extends Controller
 {
@@ -16,7 +14,7 @@ class BrandController extends Controller
      */
     public function index()
     {
-        $brands = Brand::latest('id')->paginate();
+        $brands = Brand::latest('id')->paginate(10);
         return view('backend.brand.index', compact('brands'));
     }
 
@@ -39,7 +37,7 @@ class BrandController extends Controller
     public function store(Request $request)
     {
         $validatedData = $request->validate([
-            'title' => 'required|string',
+            'title' => 'required|string|max:255',
             'status' => 'required|in:active,inactive',
         ]);
 
@@ -78,12 +76,7 @@ class BrandController extends Controller
      */
     public function edit($id)
     {
-        $brand = Brand::find($id);
-
-        if (!$brand) {
-            return redirect()->back()->with('error', 'Brand not found');
-        }
-
+        $brand = Brand::findOrFail($id);
         return view('backend.brand.edit', compact('brand'));
     }
 
@@ -98,14 +91,10 @@ class BrandController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $brand = Brand::find($id);
-
-        if (!$brand) {
-            return redirect()->back()->with('error', 'Brand not found');
-        }
+        $brand = Brand::findOrFail($id);
 
         $validatedData = $request->validate([
-            'title' => 'required|string',
+            'title' => 'required|string|max:255',
             'status' => 'required|in:active,inactive',
         ]);
 
@@ -129,21 +118,22 @@ class BrandController extends Controller
      */
     public function destroy($id)
     {
-        $brand = Brand::find($id);
+        try {
+            $brand = Brand::findOrFail($id);
+            $status = $brand->delete();
 
-        if (!$brand) {
-            return redirect()->back()->with('error', 'Brand not found');
+            $message = $status
+                ? 'Brand successfully deleted'
+                : 'Error, Please try again';
+
+            return redirect()->route('brand.index')->with(
+                $status ? 'success' : 'error',
+                $message
+            );
+        } catch (\Exception $e) {
+            \Log::error('Brand deletion failed: ' . $e->getMessage());
+            return redirect()->route('brand.index')
+                ->with('error', 'Error occurred while deleting brand');
         }
-
-        $status = $brand->delete();
-
-        $message = $status
-            ? 'Brand successfully deleted'
-            : 'Error, Please try again';
-
-        return redirect()->route('brand.index')->with(
-            $status ? 'success' : 'error',
-            $message
-        );
     }
 }

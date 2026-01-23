@@ -37,21 +37,22 @@ class ShippingController extends Controller
      */
     public function store(Request $request)
     {
-        $this->validate($request,[
-            'type'=>'string|required',
-            'price'=>'nullable|numeric',
-            'status'=>'required|in:active,inactive'
+        $validated = $request->validate([
+            'type' => 'required|string|max:255',
+            'price' => 'nullable|numeric|min:0',
+            'status' => 'required|in:active,inactive'
         ]);
-        $data=$request->all();
-        // return $data;
-        $status=Shipping::create($data);
-        if($status){
-            request()->session()->flash('success','Shipping successfully created');
+
+        try {
+            $shipping = Shipping::create($validated);
+            
+            return redirect()->route('shipping.index')
+                ->with('success', 'Shipping successfully created');
+        } catch (\Exception $e) {
+            \Log::error('Shipping creation failed: ' . $e->getMessage());
+            return redirect()->route('shipping.index')
+                ->with('error', 'Error, Please try again');
         }
-        else{
-            request()->session()->flash('error','Error, Please try again');
-        }
-        return redirect()->route('shipping.index');
     }
 
     /**
@@ -73,11 +74,8 @@ class ShippingController extends Controller
      */
     public function edit($id)
     {
-        $shipping=Shipping::find($id);
-        if(!$shipping){
-            request()->session()->flash('error','Shipping not found');
-        }
-        return view('backend.shipping.edit')->with('shipping',$shipping);
+        $shipping = Shipping::findOrFail($id);
+        return view('backend.shipping.edit')->with('shipping', $shipping);
     }
 
     /**
@@ -89,22 +87,25 @@ class ShippingController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $shipping=Shipping::find($id);
-        $this->validate($request,[
-            'type'=>'string|required',
-            'price'=>'nullable|numeric',
-            'status'=>'required|in:active,inactive'
+        $shipping = Shipping::findOrFail($id);
+        
+        $validated = $request->validate([
+            'type' => 'required|string|max:255',
+            'price' => 'nullable|numeric|min:0',
+            'status' => 'required|in:active,inactive'
         ]);
-        $data=$request->all();
-        // return $data;
-        $status=$shipping->fill($data)->save();
-        if($status){
-            request()->session()->flash('success','Shipping successfully updated');
+
+        try {
+            $status = $shipping->update($validated);
+            
+            return redirect()->route('shipping.index')
+                ->with($status ? 'success' : 'error',
+                    $status ? 'Shipping successfully updated' : 'Error, Please try again');
+        } catch (\Exception $e) {
+            \Log::error('Shipping update failed: ' . $e->getMessage());
+            return redirect()->route('shipping.index')
+                ->with('error', 'Error, Please try again');
         }
-        else{
-            request()->session()->flash('error','Error, Please try again');
-        }
-        return redirect()->route('shipping.index');
     }
 
     /**
@@ -115,20 +116,17 @@ class ShippingController extends Controller
      */
     public function destroy($id)
     {
-        $shipping=Shipping::find($id);
-        if($shipping){
-            $status=$shipping->delete();
-            if($status){
-                request()->session()->flash('success','Shipping successfully deleted');
-            }
-            else{
-                request()->session()->flash('error','Error, Please try again');
-            }
-            return redirect()->route('shipping.index');
-        }
-        else{
-            request()->session()->flash('error','Shipping not found');
-            return redirect()->back();
+        try {
+            $shipping = Shipping::findOrFail($id);
+            $status = $shipping->delete();
+            
+            return redirect()->route('shipping.index')
+                ->with($status ? 'success' : 'error',
+                    $status ? 'Shipping successfully deleted' : 'Error, Please try again');
+        } catch (\Exception $e) {
+            \Log::error('Shipping deletion failed: ' . $e->getMessage());
+            return redirect()->route('shipping.index')
+                ->with('error', 'Shipping could not be deleted');
         }
     }
 }

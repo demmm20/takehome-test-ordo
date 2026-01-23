@@ -9,7 +9,7 @@ use App\Models\PostCategory;
 use App\Models\Post;
 use App\Models\Cart;
 use App\Models\Brand;
-use App\User;
+use App\Models\User;
 use Auth;
 use Session;
 use Newsletter;
@@ -54,98 +54,85 @@ class FrontendController extends Controller
         return view('frontend.pages.product_detail')->with('product_detail',$product_detail);
     }
 
-    public function productGrids(){
-        $products=Product::query();
+    public function productGrids(Request $request){
+        $products = Product::query();
         
-        if(!empty($_GET['category'])){
-            $slug=explode(',',$_GET['category']);
-            // dd($slug);
-            $cat_ids=Category::select('id')->whereIn('slug',$slug)->pluck('id')->toArray();
-            // dd($cat_ids);
-            $products->whereIn('cat_id',$cat_ids);
-            // return $products;
+        if ($request->filled('category')) {
+            $slug = explode(',', $request->input('category'));
+            $cat_ids = Category::select('id')->whereIn('slug', $slug)->pluck('id')->toArray();
+            $products->whereIn('cat_id', $cat_ids);
         }
-        if(!empty($_GET['brand'])){
-            $slugs=explode(',',$_GET['brand']);
-            $brand_ids=Brand::select('id')->whereIn('slug',$slugs)->pluck('id')->toArray();
-            return $brand_ids;
-            $products->whereIn('brand_id',$brand_ids);
+        
+        if ($request->filled('brand')) {
+            $slugs = explode(',', $request->input('brand'));
+            $brand_ids = Brand::select('id')->whereIn('slug', $slugs)->pluck('id')->toArray();
+            $products->whereIn('brand_id', $brand_ids);
         }
-        if(!empty($_GET['sortBy'])){
-            if($_GET['sortBy']=='title'){
-                $products=$products->where('status','active')->orderBy('title','ASC');
+        
+        if ($request->filled('sortBy')) {
+            if ($request->input('sortBy') == 'title') {
+                $products = $products->where('status', 'active')->orderBy('title', 'ASC');
             }
-            if($_GET['sortBy']=='price'){
-                $products=$products->orderBy('price','ASC');
+            if ($request->input('sortBy') == 'price') {
+                $products = $products->orderBy('price', 'ASC');
             }
         }
 
-        if(!empty($_GET['price'])){
-            $price=explode('-',$_GET['price']);
-            // return $price;
-            // if(isset($price[0]) && is_numeric($price[0])) $price[0]=floor(Helper::base_amount($price[0]));
-            // if(isset($price[1]) && is_numeric($price[1])) $price[1]=ceil(Helper::base_amount($price[1]));
-            
-            $products->whereBetween('price',$price);
+        if ($request->filled('price')) {
+            $price = explode('-', $request->input('price'));
+            if (count($price) == 2 && is_numeric($price[0]) && is_numeric($price[1])) {
+                $products->whereBetween('price', [(float)$price[0], (float)$price[1]]);
+            }
         }
 
-        $recent_products=Product::where('status','active')->orderBy('id','DESC')->limit(3)->get();
-        // Sort by number
-        if(!empty($_GET['show'])){
-            $products=$products->where('status','active')->paginate($_GET['show']);
-        }
-        else{
-            $products=$products->where('status','active')->paginate(9);
-        }
-        // Sort by name , price, category
-
+        $recent_products = Product::where('status', 'active')->orderBy('id', 'DESC')->limit(3)->get();
+        
+        $perPage = $request->input('show', 9);
+        $perPage = in_array($perPage, [9, 15, 21, 30]) ? (int)$perPage : 9;
+        
+        $products = $products->where('status', 'active')->paginate($perPage);
       
-        return view('frontend.pages.product-grids')->with('products',$products)->with('recent_products',$recent_products);
+        return view('frontend.pages.product-grids')
+            ->with('products', $products)
+            ->with('recent_products', $recent_products);
     }
-    public function productLists(){
-        $products=Product::query();
+    public function productLists(Request $request){
+        $products = Product::query();
         
-        if(!empty($_GET['category'])){
-            $slug=explode(',',$_GET['category']);
-            // dd($slug);
-            $cat_ids=Category::select('id')->whereIn('slug',$slug)->pluck('id')->toArray();
-            // dd($cat_ids);
-            $products->whereIn('cat_id',$cat_ids)->paginate;
-            // return $products;
+        if ($request->filled('category')) {
+            $slug = explode(',', $request->input('category'));
+            $cat_ids = Category::select('id')->whereIn('slug', $slug)->pluck('id')->toArray();
+            $products->whereIn('cat_id', $cat_ids);
         }
-        if(!empty($_GET['brand'])){
-            $slugs=explode(',',$_GET['brand']);
-            $brand_ids=Brand::select('id')->whereIn('slug',$slugs)->pluck('id')->toArray();
-            return $brand_ids;
-            $products->whereIn('brand_id',$brand_ids);
+        
+        if ($request->filled('brand')) {
+            $slugs = explode(',', $request->input('brand'));
+            $brand_ids = Brand::select('id')->whereIn('slug', $slugs)->pluck('id')->toArray();
+            $products->whereIn('brand_id', $brand_ids);
         }
-        if(!empty($_GET['sortBy'])){
-            if($_GET['sortBy']=='title'){
-                $products=$products->where('status','active')->orderBy('title','ASC');
+        
+        if ($request->filled('sortBy')) {
+            if ($request->input('sortBy') == 'title') {
+                $products = $products->where('status', 'active')->orderBy('title', 'ASC');
             }
-            if($_GET['sortBy']=='price'){
-                $products=$products->orderBy('price','ASC');
+            if ($request->input('sortBy') == 'price') {
+                $products = $products->orderBy('price', 'ASC');
             }
         }
 
-        if(!empty($_GET['price'])){
-            $price=explode('-',$_GET['price']);
-            // return $price;
-            // if(isset($price[0]) && is_numeric($price[0])) $price[0]=floor(Helper::base_amount($price[0]));
-            // if(isset($price[1]) && is_numeric($price[1])) $price[1]=ceil(Helper::base_amount($price[1]));
-            
-            $products->whereBetween('price',$price);
+        if ($request->filled('price')) {
+            $price = explode('-', $request->input('price'));
+            if (count($price) == 2 && is_numeric($price[0]) && is_numeric($price[1])) {
+                $products->whereBetween('price', [(float)$price[0], (float)$price[1]]);
+            }
         }
 
-        $recent_products=Product::where('status','active')->orderBy('id','DESC')->limit(3)->get();
-        // Sort by number
-        if(!empty($_GET['show'])){
-            $products=$products->where('status','active')->paginate($_GET['show']);
-        }
-        else{
-            $products=$products->where('status','active')->paginate(6);
-        }
-        // Sort by name , price, category
+        $recent_products = Product::where('status', 'active')->orderBy('id', 'DESC')->limit(3)->get();
+        
+        $perPage = $request->input('show', 6);
+        $perPage = in_array($perPage, [6, 9, 15, 21, 30]) ? (int)$perPage : 6;
+        
+        $products = $products->where('status', 'active')->paginate($perPage);
 
       
         return view('frontend.pages.product-lists')->with('products',$products)->with('recent_products',$recent_products);
@@ -249,35 +236,30 @@ class FrontendController extends Controller
 
     }
 
-    public function blog(){
-        $post=Post::query();
+    public function blog(Request $request){
+        $post = Post::query();
         
-        if(!empty($_GET['category'])){
-            $slug=explode(',',$_GET['category']);
-            // dd($slug);
-            $cat_ids=PostCategory::select('id')->whereIn('slug',$slug)->pluck('id')->toArray();
-            return $cat_ids;
-            $post->whereIn('post_cat_id',$cat_ids);
-            // return $post;
+        if ($request->filled('category')) {
+            $slug = explode(',', $request->input('category'));
+            $cat_ids = PostCategory::select('id')->whereIn('slug', $slug)->pluck('id')->toArray();
+            $post->whereIn('post_cat_id', $cat_ids);
         }
-        if(!empty($_GET['tag'])){
-            $slug=explode(',',$_GET['tag']);
-            // dd($slug);
-            $tag_ids=PostTag::select('id')->whereIn('slug',$slug)->pluck('id')->toArray();
-            // return $tag_ids;
-            $post->where('post_tag_id',$tag_ids);
-            // return $post;
+        
+        if ($request->filled('tag')) {
+            $slug = explode(',', $request->input('tag'));
+            $tag_ids = PostTag::select('id')->whereIn('slug', $slug)->pluck('id')->toArray();
+            $post->whereIn('post_tag_id', $tag_ids);
         }
 
-        if(!empty($_GET['show'])){
-            $post=$post->where('status','active')->orderBy('id','DESC')->paginate($_GET['show']);
-        }
-        else{
-            $post=$post->where('status','active')->orderBy('id','DESC')->paginate(9);
-        }
-        // $post=Post::where('status','active')->paginate(8);
-        $rcnt_post=Post::where('status','active')->orderBy('id','DESC')->limit(3)->get();
-        return view('frontend.pages.blog')->with('posts',$post)->with('recent_posts',$rcnt_post);
+        $perPage = $request->input('show', 9);
+        $perPage = in_array($perPage, [9, 15, 21, 30]) ? (int)$perPage : 9;
+        
+        $post = $post->where('status', 'active')->orderBy('id', 'DESC')->paginate($perPage);
+        $rcnt_post = Post::where('status', 'active')->orderBy('id', 'DESC')->limit(3)->get();
+        
+        return view('frontend.pages.blog')
+            ->with('posts', $post)
+            ->with('recent_posts', $rcnt_post);
     }
 
     public function blogDetail($slug){

@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Banner;
-use Illuminate\Support\Str;
 
 class BannerController extends Controller
 {
@@ -44,7 +43,7 @@ class BannerController extends Controller
             'status' => 'required|in:active,inactive',
         ]);
 
-        $slug = $this->generateUniqueSlug($request->title);
+        $slug = generateUniqueSlug($request->title, Banner::class);
         $validatedData['slug'] = $slug;
 
         $banner = Banner::create($validatedData);
@@ -133,21 +132,4 @@ class BannerController extends Controller
         );
     }
 
-    /**
-     * Generate a unique slug for the banner.
-     *
-     * @param  string  $title
-     * @return string
-     */
-    private function generateUniqueSlug($title)
-    {
-        $slug = Str::slug($title);
-        $count = Banner::where('slug', $slug)->count();
-
-        if ($count > 0) {
-            $slug = $slug . '-' . date('ymdis') . '-' . rand(0, 999);
-        }
-
-        return $slug;
-    }
 }

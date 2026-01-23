@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 use App\Models\Cart;
 use App\Models\Order;
 use App\Models\Shipping;
-use App\User;
+use App\Models\User;
 use PDF;
 use Notification;
 use Helper;
@@ -44,111 +44,106 @@ class OrderController extends Controller
      */
     public function store(Request $request)
     {
-        $this->validate($request,[
-            'first_name'=>'string|required',
-            'last_name'=>'string|required',
-            'address1'=>'string|required',
-            'address2'=>'string|nullable',
-            'coupon'=>'nullable|numeric',
-            'phone'=>'numeric|required',
-            'post_code'=>'string|nullable',
-            'email'=>'string|required'
+        $validated = $request->validate([
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'address1' => 'required|string|max:500',
+            'address2' => 'nullable|string|max:500',
+            'coupon' => 'nullable|numeric',
+            'phone' => 'required|numeric|digits_between:10,15',
+            'post_code' => 'nullable|string|max:20',
+            'email' => 'required|email|max:255',
+            'shipping' => 'nullable|exists:shippings,id',
+            'payment_method' => 'required|in:cod,paypal'
         ]);
-        // return $request->all();
 
-        if(empty(Cart::where('user_id',auth()->user()->id)->where('order_id',null)->first())){
-            request()->session()->flash('error','Cart is Empty !');
-            return back();
+        $cartItems = Cart::where('user_id', auth()->user()->id)
+            ->where('order_id', null)
+            ->get();
+            
+        if ($cartItems->isEmpty()) {
+            return back()->with('error', 'Cart is Empty!');
         }
-        // $cart=Cart::get();
-        // // return $cart;
-        // $cart_index='ORD-'.strtoupper(uniqid());
-        // $sub_total=0;
-        // foreach($cart as $cart_item){
-        //     $sub_total+=$cart_item['amount'];
-        //     $data=array(
-        //         'cart_id'=>$cart_index,
-        //         'user_id'=>$request->user()->id,
-        //         'product_id'=>$cart_item['id'],
-        //         'quantity'=>$cart_item['quantity'],
-        //         'amount'=>$cart_item['amount'],
-        //         'status'=>'new',
-        //         'price'=>$cart_item['price'],
-        //     );
-
-        //     $cart=new Cart();
-        //     $cart->fill($data);
-        //     $cart->save();
-        // }
-
-        // $total_prod=0;
-        // if(session('cart')){
-        //         foreach(session('cart') as $cart_items){
-        //             $total_prod+=$cart_items['quantity'];
-        //         }
-        // }
-
-        $order=new Order();
-        $order_data=$request->all();
-        $order_data['order_number']='ORD-'.strtoupper(Str::random(10));
-        $order_data['user_id']=$request->user()->id;
-        $order_data['shipping_id']=$request->shipping;
-        $shipping=Shipping::where('id',$order_data['shipping_id'])->pluck('price');
-        // return session('coupon')['value'];
-        $order_data['sub_total']=Helper::totalCartPrice();
-        $order_data['quantity']=Helper::cartCount();
-        if(session('coupon')){
-            $order_data['coupon']=session('coupon')['value'];
-        }
-        if($request->shipping){
-            if(session('coupon')){
-                $order_data['total_amount']=Helper::totalCartPrice()+$shipping[0]-session('coupon')['value'];
+        try {
+            $order = new Order();
+            $order->order_number = 'ORD-' . strtoupper(Str::random(10));
+            $order->user_id = auth()->user()->id;
+            $order->first_name = $validated['first_name'];
+            $order->last_name = $validated['last_name'];
+            $order->email = $validated['email'];
+            $order->phone = $validated['phone'];
+            $order->address1 = $validated['address1'];
+            $order->address2 = $validated['address2'] ?? null;
+            $order->post_code = $validated['post_code'] ?? null;
+            $order->sub_total = Helper::totalCartPrice();
+            $order->quantity = Helper::cartCount();
+            $order->status = 'new';
+            $order->payment_method = $validated['payment_method'];
+            
+            // Calculate shipping
+            $shippingPrice = 0;
+            if ($request->filled('shipping')) {
+                $shipping = Shipping::find($request->input('shipping'));
+                if ($shipping) {
+                    $order->shipping_id = $shipping->id;
+                    $shippingPrice = (float)$shipping->price;
+                }
             }
-            else{
-                $order_data['total_amount']=Helper::totalCartPrice()+$shipping[0];
+            
+            // Calculate coupon discount
+            $couponDiscount = 0;
+            if (session('coupon')) {
+                $couponDiscount = (float)session('coupon')['value'];
+                $order->coupon = $couponDiscount;
             }
-        }
-        else{
-            if(session('coupon')){
-                $order_data['total_amount']=Helper::totalCartPrice()-session('coupon')['value'];
+            
+            // Calculate total
+            $order->total_amount = $order->sub_total + $shippingPrice - $couponDiscount;
+            
+            // Set payment status
+            if ($validated['payment_method'] == 'paypal') {
+                $order->payment_status = 'paid';
+            } else {
+                $order->payment_status = 'unpaid';
             }
-            else{
-                $order_data['total_amount']=Helper::totalCartPrice();
+            
+            $order->save();
+            
+            // Update cart items with order_id
+            Cart::where('user_id', auth()->user()->id)
+                ->where('order_id', null)
+                ->update(['order_id' => $order->id]);
+            
+            // Send notification to admin
+            $admin = User::where('role', 'admin')->first();
+            if ($admin) {
+                $details = [
+                    'title' => 'New order created',
+                    'actionURL' => route('order.show', $order->id),
+                    'fas' => 'fa-file-alt'
+                ];
+                Notification::send($admin, new StatusNotification($details));
             }
+            
+            // Clear session data
+            if ($validated['payment_method'] == 'cod') {
+                session()->forget('cart');
+                session()->forget('coupon');
+            }
+            
+            if ($validated['payment_method'] == 'paypal') {
+                return redirect()->route('payment')->with(['id' => $order->id]);
+            }
+            
+            return redirect()->route('home')
+                ->with('success', 'Your product successfully placed in order');
+                
+        } catch (\Exception $e) {
+            \Log::error('Order creation failed: ' . $e->getMessage());
+            return back()
+                ->with('error', 'Something went wrong. Please try again.')
+                ->withInput();
         }
-        // return $order_data['total_amount'];
-        $order_data['status']="new";
-        if(request('payment_method')=='paypal'){
-            $order_data['payment_method']='paypal';
-            $order_data['payment_status']='paid';
-        }
-        else{
-            $order_data['payment_method']='cod';
-            $order_data['payment_status']='Unpaid';
-        }
-        $order->fill($order_data);
-        $status=$order->save();
-        if($order)
-        // dd($order->id);
-        $users=User::where('role','admin')->first();
-        $details=[
-            'title'=>'New order created',
-            'actionURL'=>route('order.show',$order->id),
-            'fas'=>'fa-file-alt'
-        ];
-        Notification::send($users, new StatusNotification($details));
-        if(request('payment_method')=='paypal'){
-            return redirect()->route('payment')->with(['id'=>$order->id]);
-        }
-        else{
-            session()->forget('cart');
-            session()->forget('coupon');
-        }
-        Cart::where('user_id', auth()->user()->id)->where('order_id', null)->update(['order_id' => $order->id]);
-
-        // dd($users);        
-        request()->session()->flash('success','Your product successfully placed in order');
-        return redirect()->route('home');
     }
 
     /**
@@ -159,9 +154,8 @@ class OrderController extends Controller
      */
     public function show($id)
     {
-        $order=Order::find($id);
-        // return $order;
-        return view('backend.order.show')->with('order',$order);
+        $order = Order::with(['cart_info.product', 'user', 'shipping'])->findOrFail($id);
+        return view('backend.order.show')->with('order', $order);
     }
 
     /**
@@ -185,28 +179,38 @@ class OrderController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $order=Order::find($id);
-        $this->validate($request,[
-            'status'=>'required|in:new,process,delivered,cancel'
+        $validated = $request->validate([
+            'status' => 'required|in:new,process,delivered,cancel'
         ]);
-        $data=$request->all();
-        // return $request->status;
-        if($request->status=='delivered'){
-            foreach($order->cart as $cart){
-                $product=$cart->product;
-                // return $product;
-                $product->stock -=$cart->quantity;
-                $product->save();
+        
+        try {
+            $order = Order::with('cart.product')->findOrFail($id);
+            
+            // Update stock when order is delivered
+            if ($validated['status'] == 'delivered' && $order->status != 'delivered') {
+                foreach ($order->cart as $cart) {
+                    $product = $cart->product;
+                    if ($product) {
+                        $product->stock -= $cart->quantity;
+                        if ($product->stock < 0) {
+                            $product->stock = 0;
+                        }
+                        $product->save();
+                    }
+                }
             }
+            
+            $order->status = $validated['status'];
+            $order->save();
+            
+            return redirect()->route('order.index')
+                ->with('success', 'Successfully updated order');
+                
+        } catch (\Exception $e) {
+            \Log::error('Order update failed: ' . $e->getMessage());
+            return redirect()->route('order.index')
+                ->with('error', 'Error while updating order');
         }
-        $status=$order->fill($data)->save();
-        if($status){
-            request()->session()->flash('success','Successfully updated order');
-        }
-        else{
-            request()->session()->flash('error','Error while updating order');
-        }
-        return redirect()->route('order.index');
     }
 
     /**
@@ -217,20 +221,17 @@ class OrderController extends Controller
      */
     public function destroy($id)
     {
-        $order=Order::find($id);
-        if($order){
-            $status=$order->delete();
-            if($status){
-                request()->session()->flash('success','Order Successfully deleted');
-            }
-            else{
-                request()->session()->flash('error','Order can not deleted');
-            }
-            return redirect()->route('order.index');
-        }
-        else{
-            request()->session()->flash('error','Order can not found');
-            return redirect()->back();
+        try {
+            $order = Order::findOrFail($id);
+            $order->delete();
+            
+            return redirect()->route('order.index')
+                ->with('success', 'Order successfully deleted');
+                
+        } catch (\Exception $e) {
+            \Log::error('Order deletion failed: ' . $e->getMessage());
+            return redirect()->route('order.index')
+                ->with('error', 'Order could not be deleted');
         }
     }
 
@@ -238,35 +239,31 @@ class OrderController extends Controller
         return view('frontend.pages.order-track');
     }
 
-    public function productTrackOrder(Request $request){
-        // return $request->all();
-        $order=Order::where('user_id',auth()->user()->id)->where('order_number',$request->order_number)->first();
-        if($order){
-            if($order->status=="new"){
-            request()->session()->flash('success','Your order has been placed. please wait.');
-            return redirect()->route('home');
-
-            }
-            elseif($order->status=="process"){
-                request()->session()->flash('success','Your order is under processing please wait.');
-                return redirect()->route('home');
-    
-            }
-            elseif($order->status=="delivered"){
-                request()->session()->flash('success','Your order is successfully delivered.');
-                return redirect()->route('home');
-    
-            }
-            else{
-                request()->session()->flash('error','Your order canceled. please try again');
-                return redirect()->route('home');
-    
-            }
+    public function productTrackOrder(Request $request)
+    {
+        $validated = $request->validate([
+            'order_number' => 'required|string|max:255'
+        ]);
+        
+        $order = Order::where('user_id', auth()->user()->id)
+            ->where('order_number', $validated['order_number'])
+            ->first();
+            
+        if (!$order) {
+            return back()->with('error', 'Invalid order number. Please try again.');
         }
-        else{
-            request()->session()->flash('error','Invalid order numer please try again');
-            return back();
-        }
+        
+        $messages = [
+            'new' => 'Your order has been placed. Please wait.',
+            'process' => 'Your order is under processing. Please wait.',
+            'delivered' => 'Your order is successfully delivered.',
+            'cancel' => 'Your order has been canceled. Please try again.'
+        ];
+        
+        $message = $messages[$order->status] ?? 'Order status unknown.';
+        $type = ($order->status == 'cancel') ? 'error' : 'success';
+        
+        return redirect()->route('home')->with($type, $message);
     }
 
     // PDF generate

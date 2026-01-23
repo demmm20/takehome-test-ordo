@@ -67,7 +67,7 @@ class Helper
 
     public static function productCategoryList($option = 'all')
     {
-        if ($option = 'all') {
+        if ($option == 'all') {
             return Category::orderBy('id', 'DESC')->get();
         }
         return Category::has('products')->orderBy('id', 'DESC')->get();
@@ -75,7 +75,7 @@ class Helper
 
     public static function postTagList($option = 'all')
     {
-        if ($option = 'all') {
+        if ($option == 'all') {
             return PostTag::orderBy('id', 'desc')->get();
         }
         return PostTag::has('posts')->orderBy('id', 'desc')->get();
@@ -83,7 +83,7 @@ class Helper
 
     public static function postCategoryList($option = "all")
     {
-        if ($option = 'all') {
+        if ($option == 'all') {
             return PostCategory::orderBy('id', 'DESC')->get();
         }
         return PostCategory::has('posts')->orderBy('id', 'DESC')->get();
@@ -158,7 +158,6 @@ class Helper
     public static function grandPrice($id, $user_id)
     {
         $order = Order::find($id);
-        dd($id);
         if ($order) {
             $shipping_price = (float)$order->shipping->price;
             $order_price = self::orderPrice($id, $user_id);

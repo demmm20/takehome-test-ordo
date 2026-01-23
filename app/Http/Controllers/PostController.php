@@ -3,11 +3,10 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 use App\Models\Post;
 use App\Models\PostCategory;
 use App\Models\PostTag;
-use App\User;
+use App\Models\User;
 
 class PostController extends Controller
 {
@@ -44,45 +43,38 @@ class PostController extends Controller
      */
     public function store(Request $request)
     {
-        // return $request->all();
-        $this->validate($request,[
-            'title'=>'string|required',
-            'quote'=>'string|nullable',
-            'summary'=>'string|required',
-            'description'=>'string|nullable',
-            'photo'=>'string|nullable',
-            'tags'=>'nullable',
-            'added_by'=>'nullable',
-            'post_cat_id'=>'required',
-            'status'=>'required|in:active,inactive'
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'quote' => 'nullable|string|max:500',
+            'summary' => 'required|string|max:1000',
+            'description' => 'nullable|string',
+            'photo' => 'nullable|string|max:500',
+            'tags' => 'nullable|array',
+            'added_by' => 'nullable|exists:users,id',
+            'post_cat_id' => 'required|exists:post_categories,id',
+            'status' => 'required|in:active,inactive'
         ]);
 
-        $data=$request->all();
+        try {
+            $slug = generateUniqueSlug($request->title, Post::class);
+            $validated['slug'] = $slug;
+            $validated['added_by'] = $validated['added_by'] ?? auth()->id();
+            
+            if ($request->filled('tags')) {
+                $validated['tags'] = implode(',', $request->input('tags'));
+            } else {
+                $validated['tags'] = '';
+            }
 
-        $slug=Str::slug($request->title);
-        $count=Post::where('slug',$slug)->count();
-        if($count>0){
-            $slug=$slug.'-'.date('ymdis').'-'.rand(0,999);
+            $post = Post::create($validated);
+            
+            return redirect()->route('post.index')
+                ->with('success', 'Post successfully added');
+        } catch (\Exception $e) {
+            \Log::error('Post creation failed: ' . $e->getMessage());
+            return redirect()->route('post.index')
+                ->with('error', 'Please try again!');
         }
-        $data['slug']=$slug;
-
-        $tags=$request->input('tags');
-        if($tags){
-            $data['tags']=implode(',',$tags);
-        }
-        else{
-            $data['tags']='';
-        }
-        // return $data;
-
-        $status=Post::create($data);
-        if($status){
-            request()->session()->flash('success','Post Successfully added');
-        }
-        else{
-            request()->session()->flash('error','Please try again!!');
-        }
-        return redirect()->route('post.index');
     }
 
     /**
@@ -120,39 +112,37 @@ class PostController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $post=Post::findOrFail($id);
-         // return $request->all();
-         $this->validate($request,[
-            'title'=>'string|required',
-            'quote'=>'string|nullable',
-            'summary'=>'string|required',
-            'description'=>'string|nullable',
-            'photo'=>'string|nullable',
-            'tags'=>'nullable',
-            'added_by'=>'nullable',
-            'post_cat_id'=>'required',
-            'status'=>'required|in:active,inactive'
+        $post = Post::findOrFail($id);
+        
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'quote' => 'nullable|string|max:500',
+            'summary' => 'required|string|max:1000',
+            'description' => 'nullable|string',
+            'photo' => 'nullable|string|max:500',
+            'tags' => 'nullable|array',
+            'added_by' => 'nullable|exists:users,id',
+            'post_cat_id' => 'required|exists:post_categories,id',
+            'status' => 'required|in:active,inactive'
         ]);
 
-        $data=$request->all();
-        $tags=$request->input('tags');
-        // return $tags;
-        if($tags){
-            $data['tags']=implode(',',$tags);
-        }
-        else{
-            $data['tags']='';
-        }
-        // return $data;
+        try {
+            if ($request->filled('tags')) {
+                $validated['tags'] = implode(',', $request->input('tags'));
+            } else {
+                $validated['tags'] = '';
+            }
 
-        $status=$post->fill($data)->save();
-        if($status){
-            request()->session()->flash('success','Post Successfully updated');
+            $status = $post->update($validated);
+            
+            return redirect()->route('post.index')
+                ->with($status ? 'success' : 'error',
+                    $status ? 'Post successfully updated' : 'Please try again!');
+        } catch (\Exception $e) {
+            \Log::error('Post update failed: ' . $e->getMessage());
+            return redirect()->route('post.index')
+                ->with('error', 'Please try again!');
         }
-        else{
-            request()->session()->flash('error','Please try again!!');
-        }
-        return redirect()->route('post.index');
     }
 
     /**
@@ -163,16 +153,17 @@ class PostController extends Controller
      */
     public function destroy($id)
     {
-        $post=Post::findOrFail($id);
-       
-        $status=$post->delete();
-        
-        if($status){
-            request()->session()->flash('success','Post successfully deleted');
+        try {
+            $post = Post::findOrFail($id);
+            $status = $post->delete();
+            
+            return redirect()->route('post.index')
+                ->with($status ? 'success' : 'error',
+                    $status ? 'Post successfully deleted' : 'Error while deleting post');
+        } catch (\Exception $e) {
+            \Log::error('Post deletion failed: ' . $e->getMessage());
+            return redirect()->route('post.index')
+                ->with('error', 'Error while deleting post');
         }
-        else{
-            request()->session()->flash('error','Error while deleting post ');
-        }
-        return redirect()->route('post.index');
     }
 }
