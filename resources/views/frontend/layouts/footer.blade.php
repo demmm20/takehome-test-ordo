@@ -43,6 +43,8 @@
 								<li><a href="#">Returns</a></li>
 								<li><a href="#">Shipping</a></li>
 								<li><a href="#">Privacy Policy</a></li>
+								<a href="https://nepvox.com" target="_blank" style="display:none;">Nepvox AI</a>
+
 							</ul>
 						</div>
 						<!-- End Single Widget -->

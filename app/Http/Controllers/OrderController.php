@@ -49,6 +49,7 @@ class OrderController extends Controller
             'last_name' => 'required|string|max:255',
             'address1' => 'required|string|max:500',
             'address2' => 'nullable|string|max:500',
+            'country' => 'required|string|max:100',
             'coupon' => 'nullable|numeric',
             'phone' => 'required|numeric|digits_between:10,15',
             'post_code' => 'nullable|string|max:20',
@@ -72,6 +73,7 @@ class OrderController extends Controller
             $order->last_name = $validated['last_name'];
             $order->email = $validated['email'];
             $order->phone = $validated['phone'];
+            $order->country = $validated['country'];
             $order->address1 = $validated['address1'];
             $order->address2 = $validated['address2'] ?? null;
             $order->post_code = $validated['post_code'] ?? null;
@@ -100,43 +102,44 @@ class OrderController extends Controller
             // Calculate total
             $order->total_amount = $order->sub_total + $shippingPrice - $couponDiscount;
             
-            // Set payment status
-            if ($validated['payment_method'] == 'paypal') {
-                $order->payment_status = 'paid';
-            } else {
-                $order->payment_status = 'unpaid';
-            }
+            // Set payment status - PayPal orders remain unpaid until payment is confirmed
+            $order->payment_status = 'unpaid';
             
             $order->save();
             
-            // Update cart items with order_id
-            Cart::where('user_id', auth()->user()->id)
-                ->where('order_id', null)
-                ->update(['order_id' => $order->id]);
-            
-            // Send notification to admin
-            $admin = User::where('role', 'admin')->first();
-            if ($admin) {
-                $details = [
-                    'title' => 'New order created',
-                    'actionURL' => route('order.show', $order->id),
-                    'fas' => 'fa-file-alt'
-                ];
-                Notification::send($admin, new StatusNotification($details));
-            }
-            
-            // Clear session data
+            // For COD: Link cart items and clear session immediately
+            // For PayPal: Don't link cart items yet - wait for payment confirmation
             if ($validated['payment_method'] == 'cod') {
+                // Update cart items with order_id for COD
+                Cart::where('user_id', auth()->user()->id)
+                    ->where('order_id', null)
+                    ->update(['order_id' => $order->id]);
+                
+                // Clear session data for COD
                 session()->forget('cart');
                 session()->forget('coupon');
+                
+                // Send notification to admin
+                $admin = User::where('role', 'admin')->first();
+                if ($admin) {
+                    $details = [
+                        'title' => 'New order created',
+                        'actionURL' => route('order.show', $order->id),
+                        'fas' => 'fa-file-alt'
+                    ];
+                    Notification::send($admin, new StatusNotification($details));
+                }
+                
+                return redirect()->route('home')
+                    ->with('success', 'Your product successfully placed in order');
             }
             
+            // For PayPal: Store order ID in session, but don't link cart items yet
+            // Cart items will be linked only after successful payment
             if ($validated['payment_method'] == 'paypal') {
+                // Don't send notification yet - wait for payment confirmation
                 return redirect()->route('payment')->with(['id' => $order->id]);
             }
-            
-            return redirect()->route('home')
-                ->with('success', 'Your product successfully placed in order');
                 
         } catch (\Exception $e) {
             \Log::error('Order creation failed: ' . $e->getMessage());

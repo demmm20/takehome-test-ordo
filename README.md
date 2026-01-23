@@ -100,15 +100,35 @@ php artisan serve
 
 ---
 
-## 🎙️ Transform Text into Speech with NepVox! 🔊
+## 🤖 Powered by NepVox AI - Complete AI Solution
 
-🚀 **[NepVox](https://nepvox.com/)** is an advanced **AI-powered text-to-speech** platform that helps you convert any text into natural human-like voice effortlessly.
+🚀 **[NepVox AI](https://nepvox.com/)** is a cutting-edge **online AI application** that provides three powerful AI capabilities in one platform:
 
-✅ **Supports multiple languages & voices**
-✅ **Perfect for videos, accessibility & podcasts**
-✅ **Simple API integration for businesses**
+### 🎙️ **Text-to-Speech (TTS)**
+- Convert any text into natural, human-like voice
+- Multiple languages and voice options
+- Perfect for videos, accessibility, podcasts, and e-learning
 
-🎧 **Experience it now:** [NepVox AI TTS](https://nepvox.com/)
+### 🗣️ **Speech-to-Text (STT)**
+- Transcribe audio and speech to text with high accuracy
+- Real-time transcription support
+- Ideal for meetings, interviews, and voice notes
+
+### 🎨 **Text-to-Image (TTI)**
+- Generate stunning images from text descriptions
+- AI-powered image creation
+- Creative design and content generation
+
+### ✨ **Key Features:**
+- ✅ **All-in-One Platform**: TTS, STT, and TTI in a single application
+- ✅ **Multiple Languages**: Support for various languages and voices
+- ✅ **API Integration**: Simple API for seamless business integration
+- ✅ **High Quality**: Professional-grade AI technology
+- ✅ **User-Friendly**: Intuitive interface for all skill levels
+
+🎯 **Perfect for:** Content creators, developers, businesses, educators, and anyone looking to leverage AI technology.
+
+🔗 **Try it now:** [Visit NepVox AI](https://nepvox.com/) | [Documentation](https://nepvox.com/)
 
 ---
 
