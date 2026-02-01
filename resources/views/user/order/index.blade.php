@@ -49,7 +49,8 @@
                     <td>{{$order->first_name}} {{$order->last_name}}</td>
                     <td>{{$order->email}}</td>
                     <td>{{$order->quantity}}</td>
-                    <td>${{$order->shipping->price}}</td>
+                    <!-- Add null to prevent error -->
+                    <td>${{$order->shipping ? number_format($order->shipping->price, 2) : '0.00'}}</td>
                     <td>${{number_format($order->total_amount,2)}}</td>
                     <td>
                         @if($order->status=='new')

@@ -84,9 +84,13 @@ class HomeController extends Controller
 
     public function orderShow($id)
     {
-        $order=Order::find($id);
+        // CHANGED: Added eager loading for 'cart_info' and 'shipping' relationships
+        // WHY: Without eager loading, Laravel does lazy loading which causes N+1 queries
+        // and may fail to load cart items properly when products are deleted
+        // Also changed Order::find() to findOrFail() for better error handling
+        $order = Order::with(['cart_info', 'shipping'])->findOrFail($id);
         // return $order;
-        return view('user.order.show')->with('order',$order);
+        return view('user.order.show')->with('order', $order);
     }
     // Product Review
     public function productReviewIndex(){

@@ -43,111 +43,135 @@ class OrderController extends Controller
      * @return \Illuminate\Http\Response
      */
     public function store(Request $request)
-    {
-        $validated = $request->validate([
-            'first_name' => 'required|string|max:255',
-            'last_name' => 'required|string|max:255',
-            'address1' => 'required|string|max:500',
-            'address2' => 'nullable|string|max:500',
-            'country' => 'required|string|max:100',
-            'coupon' => 'nullable|numeric',
-            'phone' => 'required|numeric|digits_between:10,15',
-            'post_code' => 'nullable|string|max:20',
-            'email' => 'required|email|max:255',
-            'shipping' => 'nullable|exists:shippings,id',
-            'payment_method' => 'required|in:cod,paypal'
-        ]);
+{
+    $validated = $request->validate([
+        'first_name' => 'required|string|max:255',
+        'last_name' => 'required|string|max:255',
+        'address1' => 'required|string|max:500',
+        'address2' => 'nullable|string|max:500',
+        'country' => 'required|string|max:100',
+        'coupon' => 'nullable|numeric',
+        'phone' => 'required|numeric|digits_between:10,15',
+        'post_code' => 'nullable|string|max:20',
+        'email' => 'required|email|max:255',
+        'shipping' => 'nullable|exists:shippings,id',
+        'payment_method' => 'required|in:cod,paypal'
+    ]);
 
-        $cartItems = Cart::where('user_id', auth()->user()->id)
-            ->where('order_id', null)
-            ->get();
-            
-        if ($cartItems->isEmpty()) {
-            return back()->with('error', 'Cart is Empty!');
-        }
-        try {
-            $order = new Order();
-            $order->order_number = 'ORD-' . strtoupper(Str::random(10));
-            $order->user_id = auth()->user()->id;
-            $order->first_name = $validated['first_name'];
-            $order->last_name = $validated['last_name'];
-            $order->email = $validated['email'];
-            $order->phone = $validated['phone'];
-            $order->country = $validated['country'];
-            $order->address1 = $validated['address1'];
-            $order->address2 = $validated['address2'] ?? null;
-            $order->post_code = $validated['post_code'] ?? null;
-            $order->sub_total = Helper::totalCartPrice();
-            $order->quantity = Helper::cartCount();
-            $order->status = 'new';
-            $order->payment_method = $validated['payment_method'];
-            
-            // Calculate shipping
-            $shippingPrice = 0;
-            if ($request->filled('shipping')) {
-                $shipping = Shipping::find($request->input('shipping'));
-                if ($shipping) {
-                    $order->shipping_id = $shipping->id;
-                    $shippingPrice = (float)$shipping->price;
-                }
-            }
-            
-            // Calculate coupon discount
-            $couponDiscount = 0;
-            if (session('coupon')) {
-                $couponDiscount = (float)session('coupon')['value'];
-                $order->coupon = $couponDiscount;
-            }
-            
-            // Calculate total
-            $order->total_amount = $order->sub_total + $shippingPrice - $couponDiscount;
-            
-            // Set payment status - PayPal orders remain unpaid until payment is confirmed
-            $order->payment_status = 'unpaid';
-            
-            $order->save();
-            
-            // For COD: Link cart items and clear session immediately
-            // For PayPal: Don't link cart items yet - wait for payment confirmation
-            if ($validated['payment_method'] == 'cod') {
-                // Update cart items with order_id for COD
-                Cart::where('user_id', auth()->user()->id)
-                    ->where('order_id', null)
-                    ->update(['order_id' => $order->id]);
-                
-                // Clear session data for COD
-                session()->forget('cart');
-                session()->forget('coupon');
-                
-                // Send notification to admin
-                $admin = User::where('role', 'admin')->first();
-                if ($admin) {
-                    $details = [
-                        'title' => 'New order created',
-                        'actionURL' => route('order.show', $order->id),
-                        'fas' => 'fa-file-alt'
-                    ];
-                    Notification::send($admin, new StatusNotification($details));
-                }
-                
-                return redirect()->route('home')
-                    ->with('success', 'Your product successfully placed in order');
-            }
-            
-            // For PayPal: Store order ID in session, but don't link cart items yet
-            // Cart items will be linked only after successful payment
-            if ($validated['payment_method'] == 'paypal') {
-                // Don't send notification yet - wait for payment confirmation
-                return redirect()->route('payment')->with(['id' => $order->id]);
-            }
-                
-        } catch (\Exception $e) {
-            \Log::error('Order creation failed: ' . $e->getMessage());
-            return back()
-                ->with('error', 'Something went wrong. Please try again.')
-                ->withInput();
-        }
+    $cartItems = Cart::where('user_id', auth()->user()->id)
+        ->where('order_id', null)
+        ->get();
+        
+    if ($cartItems->isEmpty()) {
+        return back()->with('error', 'Cart is Empty!');
     }
+    
+    try {
+        $order = new Order();
+        $order->order_number = 'ORD-' . strtoupper(Str::random(10));
+        $order->user_id = auth()->user()->id;
+        $order->first_name = $validated['first_name'];
+        $order->last_name = $validated['last_name'];
+        $order->email = $validated['email'];
+        $order->phone = $validated['phone'];
+        $order->country = $validated['country'];
+        $order->address1 = $validated['address1'];
+        $order->address2 = $validated['address2'] ?? null;
+        $order->post_code = $validated['post_code'] ?? null;
+        $order->sub_total = Helper::totalCartPrice();
+        $order->quantity = Helper::cartCount();
+        $order->status = 'new';
+        $order->payment_method = $validated['payment_method'];
+        
+        // Calculate shipping
+        $shippingPrice = 0;
+        if ($request->filled('shipping')) {
+            $shipping = Shipping::find($request->input('shipping'));
+            if ($shipping) {
+                $order->shipping_id = $shipping->id;
+                $shippingPrice = (float)$shipping->price;
+            }
+        }
+        
+        // Calculate coupon discount
+        $couponDiscount = 0;
+        if (session('coupon')) {
+            $couponDiscount = (float)session('coupon')['value'];
+            $order->coupon = $couponDiscount;
+        }
+        
+        // Calculate total
+        $order->total_amount = $order->sub_total + $shippingPrice - $couponDiscount;
+        $order->payment_status = 'unpaid';
+        
+        $order->save();
+
+        // ✅✅✅ SAVE PRODUCT SNAPSHOTS (UNTUK SEMUA PAYMENT METHOD) ✅✅✅
+        // WHY: Preserve product data at order time, regardless of payment method
+        // This protects against product modifications/deletions after order creation
+        foreach ($cartItems as $cartItem) {
+            $product = $cartItem->product;
+            
+            if ($product) {
+                // Save product snapshot
+                $cartItem->product_title = $product->title;
+                $cartItem->product_photo = $product->photo;
+                $cartItem->product_summary = $product->summary;
+                $cartItem->save();
+                
+                // DEBUG LOG (optional, bisa dihapus di production)
+                \Log::info('Snapshot saved', [
+                    'cart_id' => $cartItem->id,
+                    'product_title' => $cartItem->product_title
+                ]);
+            } else {
+                \Log::warning('Product not found for cart', [
+                    'cart_id' => $cartItem->id,
+                    'product_id' => $cartItem->product_id
+                ]);
+            }
+        }
+        // ✅✅✅ END SNAPSHOT SECTION ✅✅✅
+
+        // HANDLE PAYMENT METHOD SPECIFIC LOGIC
+        if ($validated['payment_method'] == 'cod') {
+            // Link cart items to order
+            Cart::where('user_id', auth()->user()->id)
+                ->where('order_id', null)
+                ->update(['order_id' => $order->id]);
+            
+            // Clear session
+            session()->forget('cart');
+            session()->forget('coupon');
+            
+            // Send notification to admin
+            $admin = User::where('role', 'admin')->first();
+            if ($admin) {
+                $details = [
+                    'title' => 'New order created',
+                    'actionURL' => route('order.show', $order->id),
+                    'fas' => 'fa-file-alt'
+                ];
+                Notification::send($admin, new StatusNotification($details));
+            }
+            
+            return redirect()->route('home')
+                ->with('success', 'Your product successfully placed in order');
+        }
+        
+        if ($validated['payment_method'] == 'paypal') {
+            // Redirect to payment
+            // Cart items will be linked after successful payment confirmation
+            return redirect()->route('payment')->with(['id' => $order->id]);
+        }
+            
+    } catch (\Exception $e) {
+        \Log::error('Order creation failed: ' . $e->getMessage());
+        return back()
+            ->with('error', 'Something went wrong. Please try again.')
+            ->withInput();
+    }
+}
 
     /**
      * Display the specified resource.

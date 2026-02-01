@@ -29,7 +29,8 @@
             <td>{{$order->first_name}} {{$order->last_name}}</td>
             <td>{{$order->email}}</td>
             <td>{{$order->quantity}}</td>
-            <td>${{$order->shipping->price}}</td>
+            {{-- Fix: Add null to prevent error is null --}}
+            <td>${{$order->shipping ? number_format($order->shipping->price, 2) : '0.00'}}</td>
             <td>${{number_format($order->total_amount,2)}}</td>
             <td>
                 @if($order->status=='new')
@@ -80,7 +81,8 @@
                     </tr>
                     <tr>
                         <td>Shipping Charge</td>
-                        <td> : $ {{$order->shipping->price}}</td>
+                        {{-- Fix: Add null check for shipping to prevent error when shipping_id is null --}}
+                        <td> : $ {{$order->shipping ? number_format($order->shipping->price, 2) : '0.00'}}</td>
                     </tr>
                     <tr>
                       <td>Coupon</td>
